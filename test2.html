@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>大尺寸广告图展示</title>
+  </head>
+  <body>
+    <div id="ad1" style="width:400px;height:400px;overflow:hidden">
+      <!-- 请自行添加canvas元素 -->
+       <canvas width="200" height="200"></canvas>
+    </div>
+    <div id="ad2" style="width:500px;height:700px;overflow:hidden"> 
+	   <canvas width="500" height="700"></canvas>
+    </div>
+    <script>
+      
+      function drawLargeImage($container, imageSrc) {
+      		// 获取当前canvas DOM
+      		let canvas = $container.getElementsByTagName("canvas")[0];
+      		// 获取绘画上下文
+         	let ctx = $container.getElementsByTagName("canvas")[0].getContext("2d");
+         	let imgobj= new Image();
+         	imgobj.src = imageSrc;
+         	imgobj.onload = function(){
+         		// imageSmoothingEnabled 是Canvas2DAPI用来设置图片是否平滑的属性,true表示图片平滑（默认值,false表示图片不平滑
+         	    ctx.mozImageSmoothingEnabled = false;
+				ctx.webkitImageSmoothingEnabled = false;
+				ctx.msImageSmoothingEnabled = false;
+				ctx.imageSmoothingEnabled = false;
+         	    ctx.drawImage(imgobj, 0, 0, canvas.width, canvas.height);
+         	    // 调用像素缩放比方法
+         	    resample_single(canvas ,canvas.width, canvas.height);
+         	}
+      }
+      drawLargeImage(document.getElementById('ad1'), 'https://gw.alicdn.com/tfs/TB163pKdMmTBuNjy1XbXXaMrVXa-400-400.jpg');
+      drawLargeImage(document.getElementById('ad2'), 'https://gw.alicdn.com/tfs/TB1EaOddKuSBuNjy1XcXXcYjFXa-500-700.jpg');
+
+
+      // 缩放像素比方法
+      function resample_single(canvas,width, height, resize_canvas) {
+		    var width_source = canvas.width;
+		    var height_source = canvas.height;
+		    width = Math.round(width);
+		    height = Math.round(height);
+
+		    var ratio_w = width_source / width;
+		    var ratio_h = height_source / height;
+		    var ratio_w_half = Math.ceil(ratio_w / 2);
+		    var ratio_h_half = Math.ceil(ratio_h / 2);
+
+		    var ctx = canvas.getContext("2d");
+		    //报错问题
+		    //使用getImageData会有同源策略问题
+		    //为本地路径时候，需运行在服务端
+		    var img = ctx.getImageData(0, 0, width_source, height_source);
+		    var img2 = ctx.createImageData(width, height);
+		    var data = img.data;
+		    var data2 = img2.data;
+
+		    for (var j = 0; j < height; j++) {
+		        for (var i = 0; i < width; i++) {
+		            var x2 = (i + j * width) * 4;
+		            var weight = 0;
+		            var weights = 0;
+		            var weights_alpha = 0;
+		            var gx_r = 0;
+		            var gx_g = 0;
+		            var gx_b = 0;
+		            var gx_a = 0;
+		            var center_y = (j + 0.5) * ratio_h;
+		            var yy_start = Math.floor(j * ratio_h);
+		            var yy_stop = Math.ceil((j + 1) * ratio_h);
+		            for (var yy = yy_start; yy < yy_stop; yy++) {
+		                var dy = Math.abs(center_y - (yy + 0.5)) / ratio_h_half;
+		                var center_x = (i + 0.5) * ratio_w;
+		                var w0 = dy * dy; //pre-calc part of w
+		                var xx_start = Math.floor(i * ratio_w);
+		                var xx_stop = Math.ceil((i + 1) * ratio_w);
+		                for (var xx = xx_start; xx < xx_stop; xx++) {
+		                    var dx = Math.abs(center_x - (xx + 0.5)) / ratio_w_half;
+		                    var w = Math.sqrt(w0 + dx * dx);
+		                    if (w >= 1) {
+		                        //pixel too far
+		                        continue;
+		                    }
+		                    //hermite filter
+		                    weight = 2 * w * w * w - 3 * w * w + 1;
+		                    var pos_x = 4 * (xx + yy * width_source);
+		                    //alpha
+		                    gx_a += weight * data[pos_x + 3];
+		                    weights_alpha += weight;
+		                    //colors
+		                    if (data[pos_x + 3] < 255)
+		                        weight = weight * data[pos_x + 3] / 250;
+		                    gx_r += weight * data[pos_x];
+		                    gx_g += weight * data[pos_x + 1];
+		                    gx_b += weight * data[pos_x + 2];
+		                    weights += weight;
+		                }
+		            }
+		            data2[x2] = gx_r / weights;
+		            data2[x2 + 1] = gx_g / weights;
+		            data2[x2 + 2] = gx_b / weights;
+		            data2[x2 + 3] = gx_a / weights_alpha;
+		        }
+		    }
+		    //clear and resize canvas
+		    if (resize_canvas === true) {
+		        canvas.width = width;
+		        canvas.height = height;
+		    } else {
+		        ctx.clearRect(0, 0, width_source, height_source);
+		    }
+		    //draw
+		    ctx.putImageData(img2, 0, 0);
+	  }
+    </script>
+  </body>
+</html>
